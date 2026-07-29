@@ -1,73 +1,55 @@
 {
   "mcpServers": {
-    "git": {
-      "command": "git",
-      "args": ["--version"],
-      "description": "Local Git access for repository operations"
-    },
-    "confluence": {
-      "command": "confluence-mcp-server",
-      "args": ["--url", "${CONFLUENCE_URL}"],
+
+    "atlassian": {
+      "command": "uvx",
+      "args": ["mcp-atlassian"],
       "env": {
         "CONFLUENCE_URL": "${CONFLUENCE_URL}",
+        "CONFLUENCE_USERNAME": "${CONFLUENCE_EMAIL}",
         "CONFLUENCE_API_TOKEN": "${CONFLUENCE_API_TOKEN}",
-        "CONFLUENCE_EMAIL": "${CONFLUENCE_EMAIL}"
-      },
-      "description": "Confluence access for requirement retrieval"
-    },
-    "github": {
-      "command": "gh",
-      "args": ["auth", "status"],
-      "env": {
-        "GITHUB_TOKEN": "${GITHUB_TOKEN}"
-      },
-      "description": "GitHub access using a token from the environment or credential manager"
-    },
-    "playwright": {
-      "command": "npx",
-      "args": ["@playwright/mcp@latest"],
-      "description": "Playwright automation and browser testing"
-    },
-    "selenium": {
-      "command": "java",
-      "args": ["-jar", "selenium-server.jar"],
-      "env": {
-        "SELENIUM_SERVER_JAR": "C:\\path\\to\\selenium-server.jar"
-      },
-      "description": "Selenium browser automation server"
-    },
-    "jira": {
-      "command": "jira-mcp-server",
-      "args": ["--url", "${JIRA_URL}"],
-      "env": {
         "JIRA_URL": "${JIRA_URL}",
+        "JIRA_USERNAME": "${JIRA_EMAIL}",
         "JIRA_API_TOKEN": "${JIRA_API_TOKEN}",
-        "JIRA_EMAIL": "${JIRA_EMAIL}",
         "JIRA_PROJECT_KEY": "${JIRA_PROJECT_KEY}"
       },
-      "description": "Jira access for story and task creation from requirements",
-      "connectionCheck": {
-        "endpoint": "${JIRA_URL}/rest/api/3/myself",
-        "authHeader": "Basic base64(${JIRA_EMAIL}:${JIRA_API_TOKEN})",
-        "expectedStatus": 200
-      }
+      "description": "Atlassian MCP server — exposes Confluence pages and Jira issues as MCP tools. Install: pip install uv then uvx mcp-atlassian. Source: https://github.com/sooperset/mcp-atlassian"
     },
-    "gitlab": {
-      "command": "gitlab-mcp-server",
-      "args": ["--url", "${GITLAB_URL}"],
+
+    "github": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-github"],
       "env": {
-        "GITLAB_URL": "${GITLAB_URL}",
-        "GITLAB_TOKEN": "${GITLAB_TOKEN}",
-        "GITLAB_PROJECT_ID": "${GITLAB_PROJECT_ID}",
-        "GITLAB_PROJECT_PATH": "${GITLAB_PROJECT_PATH}",
-        "GITLAB_DEFAULT_BRANCH": "${GITLAB_DEFAULT_BRANCH}"
+        "GITHUB_PERSONAL_ACCESS_TOKEN": "${GITHUB_TOKEN}"
       },
-      "description": "GitLab access for publishing project plan (wiki + repository commit)",
-      "connectionCheck": {
-        "endpoint": "${GITLAB_URL}/api/v4/user",
-        "authHeader": "PRIVATE-TOKEN: ${GITLAB_TOKEN}",
-        "expectedStatus": 200
-      }
+      "description": "Official GitHub MCP server — search repos, read files, manage issues/PRs. Install: npx handles it automatically. Source: https://github.com/modelcontextprotocol/servers/tree/main/src/github"
+    },
+
+    "gitlab": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-gitlab"],
+      "env": {
+        "GITLAB_PERSONAL_ACCESS_TOKEN": "${GITLAB_TOKEN}",
+        "GITLAB_API_URL": "${GITLAB_URL}/api/v4"
+      },
+      "description": "Official GitLab MCP server — manage repos, wikis, milestones, MRs. Install: npx handles it automatically. Source: https://github.com/modelcontextprotocol/servers/tree/main/src/gitlab"
+    },
+
+    "playwright": {
+      "command": "npx",
+      "args": ["-y", "@playwright/mcp@latest"],
+      "description": "Playwright MCP server — browser automation and UI testing. Install: npx handles it automatically. Source: https://github.com/microsoft/playwright-mcp"
+    },
+
+    "selenium": {
+      "command": "java",
+      "args": ["-jar", "${SELENIUM_SERVER_JAR}"],
+      "env": {
+        "SELENIUM_SERVER_JAR": "${SELENIUM_SERVER_JAR}"
+      },
+      "description": "Selenium Grid MCP server — cross-browser automation. Download jar from: https://github.com/SeleniumHQ/selenium/releases"
     }
+
   }
 }
+
