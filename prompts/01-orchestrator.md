@@ -70,6 +70,57 @@ You are the SDLC orchestrator for the OfficeCheck project (GIthubCopilotCapstone
 
 ---
 
+## URL Reporting — Mandatory for Every Agent
+
+**Every agent MUST report all URLs it created or published** as part of its completion report to the Orchestrator.
+The Orchestrator MUST include these URLs in `agents/orchestrator/pipeline-log.md` and display them to the
+human reviewer **before** the HITL gate prompt is shown.
+
+This allows the human to click-verify each artifact on Confluence, Jira, GitLab, GitHub, and Render
+before approving the phase transition.
+
+### Required URL report format (agent → Orchestrator):
+
+```
+AGENT       : <AgentName>
+PHASE       : <PhaseName>
+STATUS      : COMPLETE
+DELIVERABLE : <local file path>
+PUBLISHED_URLS:
+  - [Confluence] <url>  → <description>
+  - [Jira]       <url>  → <description> (repeat per issue/board/backlog)
+  - [GitLab]     <url>  → <description> (wiki / milestones / file commit)
+  - [GitHub]     <url>  → <description> (file / PR / Actions run)
+  - [Render]     <url>  → <description> (health / app)
+```
+
+The Orchestrator logs every URL to `agents/orchestrator/pipeline-log.md` under the phase's section
+**before** running `hitl-gate.sh`, so the human can review them at the gate prompt.
+
+### Per-phase expected URLs:
+
+| Phase | Platform | What to publish |
+|-------|----------|-----------------|
+| Analysis | Confluence | Source requirements page URL |
+| Analysis | GitHub | `project-scoping/analysis.md` blob URL |
+| Requirements | Confluence | Source page URL |
+| Requirements | Jira | Each Epic URL (KAN-xxx), board URL, backlog URL |
+| Requirements | GitHub | `requirements-spec.md` blob URL, `jira-stories.md` blob URL |
+| Gap Analysis | Jira | Board URL, backlog URL (to verify all issues exist) |
+| Gap Analysis | Confluence | Source page URL (cross-check) |
+| Gap Analysis | GitHub | `gap-analysis.md` blob URL |
+| Planning | GitLab | Wiki page URL, repo file commit URL, each milestone URL |
+| Planning | GitHub | `planning/project-plan.md` blob URL |
+| Design | GitHub | Each design doc blob URL (6 files) |
+| Development | GitHub | `src/` tree URL, `review/review-report.md` blob URL, hooks tree URL |
+| Development | Jira | Implementation task URLs (KAN-478–483) |
+| Testing | GitHub | `testing/test-report.md` blob URL, `pom.xml` blob URL |
+| Deployment | GitHub | `ci-cd.yml` blob URL, Actions run URL, `deployment-log.md` blob URL |
+| Deployment | Render | `/health` endpoint URL, app root URL |
+| Documentation | GitHub | `README.md` blob URL, each `docs/` file blob URL |
+
+---
+
 ## HITL Gate Call Reference
 
 | After Phase  | Next Phase    | Deliverable path                    | Retry on Reject |

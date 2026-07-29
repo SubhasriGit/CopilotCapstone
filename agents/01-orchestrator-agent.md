@@ -20,12 +20,20 @@ source .env && bash .github/hooks/agent-pre-run-hook.sh <AgentName>
 - Exit 0 → CLEARED: agent may proceed.
 
 ## HITL Gate
-After **every** phase agent completes and BEFORE advancing to the next, the Orchestrator MUST execute:
+After **every** phase agent completes and BEFORE advancing to the next, the Orchestrator MUST:
+
+1. **Collect all published URLs** from the agent's completion report (Confluence, Jira, GitLab, GitHub, Render).
+2. **Log all URLs** to `agents/orchestrator/pipeline-log.md` under the phase's section.
+3. **Display all URLs** to the human reviewer so they can click-verify before approving.
+4. **Then execute** the gate script:
 ```bash
 source .env && bash .github/hooks/hitl-gate.sh <CompletedPhase> <NextPhase> <Deliverable>
 ```
 - Exit 1 → REJECTED by human (interactive) — STOP pipeline, log rejection.
 - Exit 0 → APPROVED (human confirmed or auto-approved in pipeline mode) — run pre-run hook for next agent.
+
+> Never present the HITL gate prompt to the human without first displaying the published URLs.
+> The human must be able to verify every artifact on its platform before approving.
 
 ## Inputs
 - `requirements/requirement.txt` — Confluence URL
