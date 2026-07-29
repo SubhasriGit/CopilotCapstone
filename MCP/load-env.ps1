@@ -35,4 +35,3 @@ Get-Content $EnvFile | ForEach-Object {
 }
 
 Write-Host "✅ Loaded $loaded env vars from $EnvFile"
-Write-Host "   MCP servers will now resolve `${VAR_NAME} correctly."

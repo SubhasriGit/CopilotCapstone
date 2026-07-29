@@ -4,7 +4,9 @@
 
 [CmdletBinding()]
 param(
-  [switch]$EnvOnly   # Only reload .env, skip hook installation
+  [switch]$EnvOnly,       # Only reload .env, skip hook installation
+  [switch]$Persist,       # Add auto-loader to PowerShell profile (run once)
+  [switch]$RemoveProfile  # Remove auto-loader from PowerShell profile
 )
 
 Write-Host ""
@@ -53,7 +55,8 @@ if (Test-Path $loadScript) {
     $line = $_.Trim()
     if ($line -eq "" -or $line.StartsWith("#")) { return }
     if ($line -match "^([A-Za-z_][A-Za-z0-9_]*)=(.*)$") {
-      [System.Environment]::SetEnvironmentVariable($matches[1], $matches[2].Trim('"').Trim("'"), "Process")
+      $k = $matches[1]; $v = $matches[2].Trim('"').Trim("'")
+      [System.Environment]::SetEnvironmentVariable($k, $v, "Process")
       $loaded++
     }
   }
@@ -76,6 +79,36 @@ foreach ($key in $mappings.Keys) {
   }
 }
 Write-Host "  ✅ MCP aliases set (GITLAB_PERSONAL_ACCESS_TOKEN, GITHUB_PERSONAL_ACCESS_TOKEN, etc.)"
+
+# ── Persist to PowerShell profile (optional, run once) ──────
+$profileMarker  = "# OfficeCheck MCP env loader"
+$profileCommand = ". `"$root\setup.ps1`" -EnvOnly"
+
+if ($RemoveProfile) {
+  if (Test-Path $PROFILE) {
+    $content = Get-Content $PROFILE -Raw
+    $cleaned = $content -replace "(?m)^$profileMarker\r?\n.*\r?\n?", ""
+    Set-Content $PROFILE $cleaned.TrimEnd()
+    Write-Host "  ✅ Removed auto-loader from PowerShell profile"
+  }
+  return
+}
+
+if ($Persist) {
+  Write-Host ""
+  Write-Host "[+] Adding auto-loader to PowerShell profile..."
+  if (-not (Test-Path $PROFILE)) {
+    New-Item -ItemType File -Path $PROFILE -Force | Out-Null
+  }
+  $profileContent = Get-Content $PROFILE -Raw -ErrorAction SilentlyContinue
+  if ($profileContent -notmatch [regex]::Escape($profileMarker)) {
+    Add-Content $PROFILE "`n$profileMarker`n$profileCommand"
+    Write-Host "  ✅ Added to: $PROFILE"
+    Write-Host "  ℹ️  Every new PowerShell terminal will now auto-load .env and MCP aliases."
+  } else {
+    Write-Host "  ✅ Already in profile (no change needed)"
+  }
+}
 
 if ($EnvOnly) {
   Write-Host ""
@@ -143,7 +176,9 @@ Write-Host ""
 Write-Host "══════════════════════════════════════════════"
 Write-Host "✅ Setup complete! Your environment is ready."
 Write-Host ""
-Write-Host "   To reload .env in a new terminal:  . .\setup.ps1 -EnvOnly"
+Write-Host "   To reload .env in a new terminal:            . .\setup.ps1 -EnvOnly"
+Write-Host "   To auto-load in every new terminal (once):  . .\setup.ps1 -Persist"
+Write-Host "   To remove auto-load from profile:           . .\setup.ps1 -RemoveProfile"
 Write-Host "   To run the app:                    mvn spring-boot:run"
 Write-Host "   To run tests:                      mvn test"
 Write-Host "   To trigger Render deploy:          sh deployment/deploy.sh"
