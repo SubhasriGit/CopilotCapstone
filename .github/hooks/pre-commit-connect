@@ -1,0 +1,66 @@
+#!/bin/sh
+# pre-commit-connect: Validates that required connections are reachable.
+# Blocks the commit if a critical connection is unreachable.
+
+set -e
+
+if [ "${OFFLINE_MODE}" = "true" ]; then
+    echo "ℹ️  OFFLINE_MODE=true — skipping connection validation."
+    exit 0
+fi
+
+echo "🔌 Validating required connections..."
+
+check_connection() {
+    NAME="$1"
+    URL="$2"
+    CRITICAL="$3"
+
+    if [ -z "$URL" ]; then
+        echo "  ⚪ $NAME — not configured (skipped)"
+        return 0
+    fi
+
+    # Extract host and port
+    HOST=$(echo "$URL" | sed -E 's|https?://([^/:]+).*|\1|')
+    PORT=$(echo "$URL" | sed -E 's|.*:([0-9]+).*|\1|')
+    if [ "$PORT" = "$URL" ]; then
+        PORT=80
+        if echo "$URL" | grep -q "^https"; then PORT=443; fi
+    fi
+
+    # Use curl to check reachability with a 5-second timeout
+    if curl --silent --max-time 5 --output /dev/null "$URL" 2>/dev/null; then
+        echo "  ✅ $NAME — reachable ($URL)"
+    else
+        if [ "$CRITICAL" = "true" ]; then
+            echo ""
+            echo "  ❌ ERROR: Critical connection '$NAME' is unreachable!"
+            echo "     URL: $URL"
+            echo "     If working offline, set: OFFLINE_MODE=true"
+            echo ""
+            return 1
+        else
+            echo "  ⚠️  WARNING: Non-critical connection '$NAME' is unreachable ($URL)"
+        fi
+    fi
+    return 0
+}
+
+FAILED=0
+
+# Check External API (non-critical — warn only)
+check_connection "External API" "${EXTERNAL_API_URL}" "false" || FAILED=1
+
+# Add critical connections here as OQ-003 is resolved:
+# check_connection "Database" "${DB_URL}" "true" || FAILED=1
+
+if [ "$FAILED" -eq 1 ]; then
+    echo ""
+    echo "🚫 Commit blocked due to unreachable critical connection."
+    echo "   Set OFFLINE_MODE=true to bypass if working offline."
+    exit 1
+fi
+
+echo "✅ All connection checks passed."
+exit 0

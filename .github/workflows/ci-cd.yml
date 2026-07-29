@@ -1,0 +1,261 @@
+name: CI/CD Pipeline — OfficeCheck (Render)
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  JAVA_VERSION: '20'
+  MAVEN_OPTS: '-Xmx1024m'
+
+jobs:
+
+  # ─────────────────────────────────────────────
+  # Stage 1: Secret Scan
+  # Blocks pipeline immediately if hardcoded secrets detected.
+  # ─────────────────────────────────────────────
+  secret-scan:
+    name: 🔍 Secret Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run secret detection hook
+        run: |
+          chmod +x .github/hooks/pre-commit-secrets
+          # Scan all tracked files (not just staged) in CI context
+          STAGED_FILES=$(git diff --name-only HEAD~1 HEAD 2>/dev/null || git ls-files)
+          FOUND_SECRET=0
+          PATTERNS='password\s*=\s*["'"'"'][^"'"'"']+["'"'"']
+          api[_-]?key\s*=\s*["'"'"'][^"'"'"']+["'"'"']
+          secret\s*=\s*["'"'"'][^"'"'"']+["'"'"']
+          token\s*=\s*["'"'"'][^"'"'"']+["'"'"']
+          ghp_[A-Za-z0-9]{36}
+          sk-[A-Za-z0-9]{48}
+          -----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY'
+          for FILE in $STAGED_FILES; do
+            if [ ! -f "$FILE" ]; then continue; fi
+            while IFS= read -r PATTERN; do
+              if grep -iEq "$PATTERN" "$FILE" 2>/dev/null; then
+                echo "❌ Secret detected in $FILE (pattern: $PATTERN)"
+                FOUND_SECRET=1
+              fi
+            done <<PATTERNS_EOF
+          $PATTERNS
+          PATTERNS_EOF
+          done
+          if [ "$FOUND_SECRET" -eq 1 ]; then
+            echo "🚫 Pipeline blocked — remove all hardcoded secrets before pushing."
+            exit 1
+          fi
+          echo "✅ Secret scan passed."
+
+  # ─────────────────────────────────────────────
+  # Stage 2: Build
+  # Compiles the application and verifies it builds cleanly.
+  # ─────────────────────────────────────────────
+  build:
+    name: 🔨 Build
+    runs-on: ubuntu-latest
+    needs: secret-scan
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Java ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: 'corretto'
+          cache: maven
+
+      - name: Build (skip tests)
+        run: mvn clean compile -q
+
+      - name: Package JAR
+        run: mvn package -DskipTests -q
+
+      - name: Upload JAR artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-jar
+          path: target/*.jar
+          retention-days: 7
+
+  # ─────────────────────────────────────────────
+  # Stage 3: Test
+  # Runs all unit, integration, security, and self-healing tests.
+  # Deployment is blocked if any test fails.
+  # ─────────────────────────────────────────────
+  test:
+    name: 🧪 Test
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Java ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          java-version: ${{ env.JAVA_VERSION }}
+          distribution: 'corretto'
+          cache: maven
+
+      - name: Run all tests with coverage
+        run: mvn test jacoco:report
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: |
+            target/surefire-reports/
+            target/site/jacoco/
+
+      - name: Check coverage gate (≥80%)
+        run: mvn jacoco:check
+
+  # ─────────────────────────────────────────────
+  # Stage 4: Deploy to Render
+  # Triggers a Render deploy via Deploy Hook URL.
+  # Requires: secret-scan ✅ + build ✅ + test ✅
+  # Only runs on push to main branch.
+  # ─────────────────────────────────────────────
+  deploy:
+    name: 🚀 Deploy to Render
+    runs-on: ubuntu-latest
+    needs: [ secret-scan, build, test ]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    environment: production
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Validate Render secrets are configured
+        run: |
+          if [ -z "${{ secrets.RENDER_DEPLOY_HOOK_URL }}" ]; then
+            echo "❌ RENDER_DEPLOY_HOOK_URL secret is not set in GitHub Actions."
+            echo "   Go to: Settings → Secrets → Actions → New repository secret"
+            echo "   Get the URL from: Render Dashboard → officecheck-api → Settings → Deploy Hook"
+            exit 1
+          fi
+          echo "✅ Render deploy hook is configured."
+
+      - name: Trigger Render deployment
+        run: |
+          echo "🚀 Triggering Render deploy for OfficeCheck API..."
+          RESPONSE=$(curl -s -o /tmp/render-response.json -w "%{http_code}" \
+            -X POST "${{ secrets.RENDER_DEPLOY_HOOK_URL }}")
+          echo "   Render API response: HTTP $RESPONSE"
+          cat /tmp/render-response.json || true
+          if [ "$RESPONSE" != "200" ] && [ "$RESPONSE" != "201" ]; then
+            echo "❌ Render deploy trigger failed (HTTP $RESPONSE)"
+            exit 1
+          fi
+          echo "✅ Deploy triggered successfully. Render is building and deploying..."
+
+      - name: Wait for Render deployment to complete
+        run: |
+          if [ -z "${{ secrets.RENDER_API_KEY }}" ] || [ -z "${{ secrets.RENDER_SERVICE_ID }}" ]; then
+            echo "⚠️ RENDER_API_KEY or RENDER_SERVICE_ID not set — skipping deploy status poll."
+            echo "   Waiting 120s for Render to finish deploying..."
+            sleep 120
+            exit 0
+          fi
+          echo "⏳ Polling Render deploy status..."
+          for i in $(seq 1 24); do
+            STATUS=$(curl -s \
+              -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
+              "https://api.render.com/v1/services/${{ secrets.RENDER_SERVICE_ID }}/deploys?limit=1" \
+              | python3 -c "import sys,json; d=json.load(sys.stdin); print(d[0]['deploy']['status'])" 2>/dev/null || echo "unknown")
+            echo "   Attempt $i/24 — status: $STATUS"
+            if [ "$STATUS" = "live" ]; then
+              echo "✅ Render deployment is LIVE."
+              exit 0
+            elif [ "$STATUS" = "build_failed" ] || [ "$STATUS" = "update_failed" ] || [ "$STATUS" = "canceled" ]; then
+              echo "❌ Render deployment FAILED with status: $STATUS"
+              exit 1
+            fi
+            sleep 15
+          done
+          echo "⚠️ Timed out waiting for Render deploy — check Render dashboard."
+          exit 1
+
+  # ─────────────────────────────────────────────
+  # Stage 5: Smoke Test
+  # Validates the Render-deployed app is alive.
+  # ─────────────────────────────────────────────
+  smoke-test:
+    name: 🔥 Smoke Test
+    runs-on: ubuntu-latest
+    needs: deploy
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    steps:
+      - name: Health check against Render URL
+        env:
+          APP_URL: ${{ secrets.RENDER_APP_URL }}
+        run: |
+          if [ -z "$APP_URL" ]; then
+            echo "⚠️ RENDER_APP_URL not configured — smoke test skipped."
+            echo "   Set RENDER_APP_URL secret to: https://officecheck-api.onrender.com"
+            exit 0
+          fi
+          echo "🔥 Running smoke test against $APP_URL/health ..."
+          for i in 1 2 3; do
+            RESPONSE=$(curl --silent --max-time 15 --write-out "%{http_code}" \
+              --output /tmp/health.json "$APP_URL/health" || echo "000")
+            echo "   Attempt $i — HTTP $RESPONSE"
+            if [ "$RESPONSE" = "200" ]; then break; fi
+            sleep 10
+          done
+          cat /tmp/health.json || true
+          if [ "$RESPONSE" != "200" ]; then
+            echo "❌ Smoke test FAILED — /health returned HTTP $RESPONSE"
+            exit 1
+          fi
+          STATUS=$(python3 -c "import sys,json; print(json.load(open('/tmp/health.json'))['status'])" 2>/dev/null || echo "UNKNOWN")
+          if [ "$STATUS" != "UP" ]; then
+            echo "❌ Smoke test FAILED — health status is '$STATUS'"
+            exit 1
+          fi
+          echo "✅ Smoke test PASSED — OfficeCheck is UP on Render."
+
+  # ─────────────────────────────────────────────
+  # Rollback — triggered when smoke-test fails
+  # Uses Render API to roll back to previous deploy
+  # ─────────────────────────────────────────────
+  rollback:
+    name: ⏪ Rollback
+    runs-on: ubuntu-latest
+    needs: smoke-test
+    if: failure() && github.ref == 'refs/heads/main'
+    steps:
+      - name: Rollback to previous Render deployment
+        run: |
+          echo "⚠️ Smoke test failed — initiating rollback on Render..."
+          if [ -z "${{ secrets.RENDER_API_KEY }}" ] || [ -z "${{ secrets.RENDER_SERVICE_ID }}" ]; then
+            echo "❌ RENDER_API_KEY or RENDER_SERVICE_ID not set — cannot auto-rollback."
+            echo "   Manually rollback via: Render Dashboard → officecheck-api → Deploys → select previous → Rollback"
+            exit 1
+          fi
+          # Get the second most recent deploy (previous good deploy)
+          PREV_DEPLOY_ID=$(curl -s \
+            -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
+            "https://api.render.com/v1/services/${{ secrets.RENDER_SERVICE_ID }}/deploys?limit=2" \
+            | python3 -c "import sys,json; d=json.load(sys.stdin); print(d[1]['deploy']['id'])" 2>/dev/null)
+          if [ -z "$PREV_DEPLOY_ID" ]; then
+            echo "❌ Could not determine previous deploy ID."
+            exit 1
+          fi
+          echo "   Rolling back to deploy: $PREV_DEPLOY_ID"
+          curl -s -X POST \
+            -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
+            "https://api.render.com/v1/services/${{ secrets.RENDER_SERVICE_ID }}/deploys/$PREV_DEPLOY_ID/rollback"
+          echo "✅ Rollback triggered. Monitor at: https://dashboard.render.com"

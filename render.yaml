@@ -1,0 +1,70 @@
+# render.yaml — Render Infrastructure as Code
+# Docs: https://render.com/docs/infrastructure-as-code
+#
+# Deploy to Render:
+#   1. Push this file to the root of your repository.
+#   2. Connect your GitHub repo in the Render dashboard.
+#   3. Render auto-detects this file and creates the services.
+#   4. Set all `sync: false` env vars in the Render dashboard (never commit real values).
+
+services:
+  # ─────────────────────────────────────────────
+  # Web Service — OfficeCheck Spring Boot API
+  # ─────────────────────────────────────────────
+  - type: web
+    name: officecheck-api
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    region: singapore          # Closest to IST timezone; change to oregon / frankfurt as needed
+    plan: free                 # Upgrade to starter/standard for production workloads
+    branch: main
+    autoDeploy: true           # Auto-deploy on push to main (can also use deploy hook)
+
+    healthCheckPath: /health
+
+    envVars:
+      # Application
+      - key: APP_ENV
+        value: production
+      - key: SERVER_PORT
+        value: 8080
+
+      # Database — use Render PostgreSQL add-on (see databases section below)
+      - key: DB_URL
+        fromDatabase:
+          name: officecheck-db
+          property: connectionString
+      - key: DB_USERNAME
+        fromDatabase:
+          name: officecheck-db
+          property: user
+      - key: DB_PASSWORD
+        fromDatabase:
+          name: officecheck-db
+          property: password
+
+      # External API — set real values in Render dashboard, not here
+      - key: EXTERNAL_API_URL
+        sync: false           # Set in Render dashboard: https://api.example.com
+      - key: EXTERNAL_API_KEY
+        sync: false           # Set in Render dashboard (sensitive)
+
+      # Self-healing tuning (optional overrides)
+      - key: RETRY_MAX_ATTEMPTS
+        value: "3"
+      - key: RETRY_BASE_DELAY_MS
+        value: "1000"
+      - key: CB_FAILURE_THRESHOLD
+        value: "3"
+      - key: CB_RESET_TIMEOUT_MS
+        value: "30000"
+
+  # ─────────────────────────────────────────────
+  # PostgreSQL Database
+  # ─────────────────────────────────────────────
+databases:
+  - name: officecheck-db
+    region: singapore
+    plan: free                 # 1GB storage; upgrade for production
+    databaseName: officecheck
+    user: officecheck_user
