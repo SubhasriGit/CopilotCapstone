@@ -1,4 +1,6 @@
 {
+  "_comment": "MCP server configuration for OfficeCheck. Values are resolved from environment variables. Load .env before starting your MCP host: on Windows run the load-env.ps1 helper, on Mac/Linux run: set -a && source .env && set +a",
+  "_envFile": ".env",
   "mcpServers": {
 
     "atlassian": {
