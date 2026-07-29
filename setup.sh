@@ -32,7 +32,15 @@ echo "[2/4] Loading .env into shell environment..."
 set -a
 . ./.env
 set +a
-echo "  ✅ .env loaded — MCP servers will resolve variables correctly"
+
+# MCP variable aliases — map .env keys to what each MCP server expects
+export GITLAB_PERSONAL_ACCESS_TOKEN="$GITLAB_TOKEN"
+export GITHUB_PERSONAL_ACCESS_TOKEN="$GITHUB_TOKEN"
+export GITLAB_API_URL="$GITLAB_URL/api/v4"
+export CONFLUENCE_USERNAME="$CONFLUENCE_EMAIL"
+export JIRA_USERNAME="$JIRA_EMAIL"
+
+echo "  ✅ .env loaded + MCP aliases set (GITLAB_PERSONAL_ACCESS_TOKEN, GITHUB_PERSONAL_ACCESS_TOKEN, etc.)"
 
 if [ "$1" = "--env-only" ]; then
   echo ""
