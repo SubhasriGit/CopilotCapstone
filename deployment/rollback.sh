@@ -1,42 +1,39 @@
 #!/bin/sh
-# rollback.sh — Rolls back GIthubCopilotCapstone to the last known good deployment.
-# No secrets in this script — all via environment variables.
-#
-# Usage: APP_ENV=production ROLLBACK_VERSION=<version> sh rollback.sh
+# rollback.sh — Rolls back OfficeCheck to the previous Render deployment.
+# All configuration is via environment variables — no secrets in this script.
 
-set -e
+set -eu
 
-echo "⏪ GIthubCopilotCapstone Rollback Script"
-echo "   Environment    : ${APP_ENV:-local}"
-echo "   Target Version : ${ROLLBACK_VERSION:-latest-stable}"
-echo "   Timestamp      : $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+echo "⏪ OfficeCheck Rollback Script"
+echo "   Timestamp : $(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
-echo ""
-echo "⚠️  ROLLBACK INITIATED"
-echo "   Reason: Smoke test failure or manual trigger"
-echo ""
+require_env() {
+  eval "value=\${$1-}"
+  if [ -z "$value" ]; then
+    echo "❌ Required environment variable '$1' is not set."
+    exit 1
+  fi
+}
 
-# ── OQ-005: Replace with actual rollback command for your deployment target ──
-# Examples:
-#
-# AWS Elastic Beanstalk:
-#   aws elasticbeanstalk update-environment \
-#     --environment-name capstone-prod \
-#     --version-label "$ROLLBACK_VERSION"
-#
-# Kubernetes:
-#   kubectl rollout undo deployment/capstone-app -n production
-#
-# Docker / Docker Compose:
-#   docker pull yourrepo/capstone:${ROLLBACK_VERSION}
-#   docker-compose up -d
-#
-# On-prem systemd:
-#   ssh deploy@host "systemctl stop capstone && \
-#                    cp /opt/capstone/releases/${ROLLBACK_VERSION}.jar /opt/capstone/current.jar && \
-#                    systemctl start capstone"
+require_env "RENDER_API_KEY"
+require_env "RENDER_SERVICE_ID"
 
-echo "   ── PLACEHOLDER: add rollback command when OQ-005 is resolved ──"
-echo ""
-echo "✅ Rollback script complete. Verify deployment health with:"
-echo "   curl \$APP_URL/health"
+response_file="deployment/render-deploys.json"
+curl -fsS \
+  -H "Authorization: Bearer $RENDER_API_KEY" \
+  "https://api.render.com/v1/services/$RENDER_SERVICE_ID/deploys?limit=10" \
+  -o "$response_file"
+
+rollback_id=$(python -c "import json; data=json.load(open('$response_file')); items=data.get('items', data) if isinstance(data, dict) else data; items=items if isinstance(items, list) else [items]; ids=[]; [ids.append((item.get('deploy', item).get('id') or item.get('id'))) for item in items if (item.get('deploy', item).get('id') or item.get('id'))]; print(ids[1] if len(ids) > 1 else '')")
+rm -f "$response_file"
+
+if [ -z "$rollback_id" ]; then
+  echo "❌ Could not determine previous Render deploy ID."
+  exit 1
+fi
+
+curl -fsS -X POST \
+  -H "Authorization: Bearer $RENDER_API_KEY" \
+  "https://api.render.com/v1/services/$RENDER_SERVICE_ID/deploys/$rollback_id/rollback"
+
+echo "✅ Rollback triggered for deploy $rollback_id"

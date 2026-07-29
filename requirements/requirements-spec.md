@@ -1,20 +1,102 @@
 # Requirements Specification
 
-**Project:** GIthubCopilotCapstone  
-**Phase:** Requirements  
-**Source:** User instructions + `requirements/requirement.txt` (Confluence URL configured)  
-**Status:** DRAFT — Awaiting open question resolutions (OQ-002 to OQ-005)
+**Project:** GIthubCopilotCapstone
+**Phase:** Requirements
+**Source:** Confluence page (OfficeCheck business requirements) + User instructions (SDLC pipeline requirements)
+**Status:** COMPLETE
 
 ---
 
-## 1. Requirement Source
-| Source               | Reference                                         |
-|----------------------|---------------------------------------------------|
-| Confluence Page      | `https://subhasree.atlassian.net/wiki/spaces/~712020ff355f343c4d4b6b9b7cc6aa838aff7b/pages/14090241/Requirements` |
-| User Instructions    | Direct input during project initiation session    |
-| Analysis Document    | `project-scoping/analysis.md`                     |
+## Requirements Count Summary
+
+| Category | Sub-Category | Count | Source |
+|---|---|---|---|
+| **Functional Requirements** | SDLC Pipeline | 5 (FR-001–005) | User instructions |
+| | Pre-Commit Hooks | 3 (FR-006–008) | User instructions |
+| | Self-Healing Automation | 4 (FR-009–012) | User instructions |
+| | CI/CD Pipeline | 3 (FR-013–015) | User instructions |
+| | **FR Total** | **15** | |
+| **Non-Functional Requirements** | Security | 4 (NFR-001–004) | Confluence + best practice |
+| | Reliability & Availability | 2 (NFR-005–006) | Confluence + best practice |
+| | Maintainability | 3 (NFR-007–009) | User instructions |
+| | Portability | 1 (NFR-010) | User instructions |
+| | **NFR Total** | **10** | |
+| **Grand Total** | | **25** | |
 
 ---
+
+## Confluence Context → Requirement Mapping
+
+The Confluence page described the **OfficeCheck** business problem and E2E flow.
+Below is how each section of the Confluence page drove specific requirements.
+
+### Confluence Section 1 — Business Problem
+> *"Paper logbooks are messy, not real-time, and a privacy risk for visitor data."*
+
+| Confluence Content | Requirement Derived | Reasoning |
+|---|---|---|
+| Privacy risk of paper logbook | NFR-001 — No hardcoded credentials | Visitor data privacy → must not leak credentials that access visitor records |
+| Privacy risk of paper logbook | NFR-002 — Secrets via env vars only | Same privacy concern → all access tokens must be environment-managed |
+| Privacy risk of paper logbook | NFR-003 — TLS/HTTPS required | Data in transit must be encrypted to protect visitor PII |
+| Privacy risk of paper logbook | NFR-004 — Input validation | Raw visitor input must be validated before reaching business logic |
+
+### Confluence Section 2 — E2E Business Flow Step 1
+> *"A visitor arrives and enters their name, company, and host on a tablet screen."*
+
+| Confluence Content | Requirement Derived | Reasoning |
+|---|---|---|
+| Visitor enters name, company, host | FR-001 — Visitor self-service sign-in form | Direct implementation of the tablet sign-in step |
+| "Simple tablet screen" | FR-002 — Sign-in accessible via tablet/web browser | Responsive web UI needed to support tablet form factor |
+
+### Confluence Section 2 — E2E Business Flow Step 2
+> *"System automatically sends email/notification to host: 'Your visitor has arrived.'"*
+
+| Confluence Content | Requirement Derived | Reasoning |
+|---|---|---|
+| Email notification sent automatically | FR-003 — Email notification to host on check-in | Direct mapping to automated email trigger |
+| Notification includes visitor name + arrival context | FR-004 — Notification includes visitor name and arrival time | "Hi Alice, your visitor (John Doe) has arrived" → name + timestamp in email body |
+
+### Confluence Section 2 — E2E Business Flow Step 3
+> *"System logs the exact check-in time. When leaving, visitor checks out."*
+
+| Confluence Content | Requirement Derived | Reasoning |
+|---|---|---|
+| "Logs exact check-in time" | FR-005 — Check-in timestamp logging | ISO-8601 timestamp stored on sign-in |
+| "Visitor checks out when leaving" | FR-006 — Check-out records check-out timestamp | PATCH endpoint updates status to CHECKED_OUT with timestamp |
+| Real-time logging requirement | NFR-005 — Auto-recovery from transient failures | Timestamp logging must be reliable → self-healing needed if DB is temporarily unavailable |
+
+### Confluence Section 2 — E2E Business Flow Step 4
+> *"Building manager has a dashboard showing real-time list of all active guests."*
+
+| Confluence Content | Requirement Derived | Reasoning |
+|---|---|---|
+| "Real-time list of active guests" | FR-007 — Dashboard shows real-time active guest list | GET /visitors/active API + polling/subscription |
+| "Active guests currently inside" | FR-008 — Dashboard distinguishes active vs checked-out | Filter by status: CHECKED_IN vs CHECKED_OUT |
+| "Real-time" requirement | NFR-006 — Health check endpoint | Dashboard depends on live API → health endpoint needed for monitoring |
+
+### Confluence Section 3 — Stakeholder: Security / Fire Warden
+> *"Accurate headcount for emergency/evacuation."*
+
+| Confluence Content | Requirement Derived | Reasoning |
+|---|---|---|
+| Headcount accuracy for fire safety | NFR-004 — Input validation on all visitor data | Wrong names/companies in the system → inaccurate headcount → fire safety risk |
+| Evacuation list must be reliable | NFR-005 — Self-healing / auto-recovery | If system crashes mid-evacuation, retry logic ensures data is not lost |
+
+### From User Instructions (SDLC Capstone Requirements)
+> These requirements were specified directly by the user as part of the SDLC capstone project scope — not from Confluence.
+
+| Requirement Group | IDs | What the user specified |
+|---|---|---|
+| SDLC Pipeline | FR-001–005 | End-to-end pipeline with 9 phase agents, an orchestrator, and phase gates |
+| Pre-Commit Hooks | FR-006–008 | Secret scanning hook, connection validation hook, auto-install via setup.sh |
+| Self-Healing | FR-009–012 | Retry with backoff, circuit breaker, graceful degradation, orchestrator retry |
+| CI/CD Pipeline | FR-013–015 | GitHub Actions with secret scan, build, test, deploy stages |
+| Maintainability | NFR-007–009 | ≥80% test coverage, Javadoc, docs in sync with code |
+| Portability | NFR-010 | Deployable to cloud/on-prem/container via env vars |
+
+---
+
+
 
 ## 2. Functional Requirements
 

@@ -2,7 +2,7 @@
 
 ## Runnable Role
 Creates the project plan from analysis output, then publishes it to GitLab.  
-Uses `prompts/04-planning-prompt.md` and `skills/04-planning-skill.md`.
+Uses `prompts/05-planning.md` and `skills/05-planning.md`.
 
 ## Pre-Run Hook (Mandatory)
 The Orchestrator runs this BEFORE invoking PlanningAgent:

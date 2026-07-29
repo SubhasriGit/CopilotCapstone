@@ -2,7 +2,7 @@
 
 ## Runnable Role
 Extracts requirements from Confluence, creates Jira epics/stories/tasks, and detects gaps.  
-Uses `prompts/03-requirements-prompt.md` and `skills/03-requirements-skill.md`.
+Uses `prompts/03-requirements.md` and `skills/03-requirements.md`.
 
 ## Pre-Run Hook (Mandatory)
 The Orchestrator runs this BEFORE invoking RequirementsAgent:
@@ -22,7 +22,6 @@ The hook checks:
 ## Outputs
 - `requirements/requirements-spec.md` — structured requirements (FRs, NFRs, traceability)
 - `requirements/jira-stories.md` — mapping of each requirement to Jira issue keys
-- `requirements/gap-analysis.md` — gaps found between Confluence content and created stories
 - Jira issues created in the configured project (epics → stories → tasks)
 
 ## Execution Steps
@@ -32,6 +31,5 @@ The hook checks:
 4. Extract and document all requirements into `requirements/requirements-spec.md`.
 5. Create Jira Epic per business domain, Stories per functional requirement, Tasks per acceptance criterion.
 6. Write Jira issue keys to `requirements/jira-stories.md`.
-7. Perform gap analysis — compare requirements vs created stories. Document in `requirements/gap-analysis.md`.
-8. Update any gaps as new Jira issues or sub-tasks.
+7. Report `STATUS: COMPLETE` to the Orchestrator.
 

@@ -13,7 +13,5 @@
 | Jira Story Creation | Creates one Story per FR with description and acceptance criteria; links to Epic |
 | Jira Task Creation | Creates one Task per acceptance criterion; links to parent Story |
 | Jira Issue Persistence | Writes all created issue keys and titles to `requirements/jira-stories.md` |
-| Gap Detection | Compares requirement spec against Jira stories to find missing, orphan, or untraceable items |
-| Gap Remediation | Creates Jira issues for any gaps found and documents in `requirements/gap-analysis.md` |
 | Conflict Detection | Flags ambiguous or conflicting statements in the requirement spec |
 

@@ -1,7 +1,7 @@
 # Analysis Agent
 
 ## Runnable Role
-Performs the Analysis phase using `prompts/02-analysis-prompt.md` and `skills/02-analysis-skill.md`.
+Performs the Analysis phase using `prompts/02-analysis.md` and `skills/02-analysis.md`.
 
 ## Pre-Run Hook (Mandatory)
 The Orchestrator runs this BEFORE invoking AnalysisAgent:

@@ -1,35 +1,23 @@
 # render.yaml — Render Infrastructure as Code
 # Docs: https://render.com/docs/infrastructure-as-code
-#
-# Deploy to Render:
-#   1. Push this file to the root of your repository.
-#   2. Connect your GitHub repo in the Render dashboard.
-#   3. Render auto-detects this file and creates the services.
-#   4. Set all `sync: false` env vars in the Render dashboard (never commit real values).
+# Production deploys are triggered by GitHub Actions after manual environment approval.
 
 services:
-  # ─────────────────────────────────────────────
-  # Web Service — OfficeCheck Spring Boot API
-  # ─────────────────────────────────────────────
   - type: web
     name: officecheck-api
     runtime: docker
     dockerfilePath: ./Dockerfile
-    region: singapore          # Closest to IST timezone; change to oregon / frankfurt as needed
-    plan: free                 # Upgrade to starter/standard for production workloads
+    region: singapore
+    plan: free
     branch: main
-    autoDeploy: true           # Auto-deploy on push to main (can also use deploy hook)
-
+    autoDeploy: false
     healthCheckPath: /health
 
     envVars:
-      # Application
       - key: APP_ENV
         value: production
-      - key: SERVER_PORT
+      - key: APP_PORT
         value: 8080
-
-      # Database — use Render PostgreSQL add-on (see databases section below)
       - key: DB_URL
         fromDatabase:
           name: officecheck-db
@@ -42,29 +30,24 @@ services:
         fromDatabase:
           name: officecheck-db
           property: password
-
-      # External API — set real values in Render dashboard, not here
       - key: EXTERNAL_API_URL
-        sync: false           # Set in Render dashboard: https://api.example.com
+        sync: false
       - key: EXTERNAL_API_KEY
-        sync: false           # Set in Render dashboard (sensitive)
-
-      # Self-healing tuning (optional overrides)
+        sync: false
       - key: RETRY_MAX_ATTEMPTS
-        value: "3"
+        value: '3'
       - key: RETRY_BASE_DELAY_MS
-        value: "1000"
+        value: '1000'
       - key: CB_FAILURE_THRESHOLD
-        value: "3"
+        value: '3'
       - key: CB_RESET_TIMEOUT_MS
-        value: "30000"
+        value: '30000'
 
-  # ─────────────────────────────────────────────
-  # PostgreSQL Database
-  # ─────────────────────────────────────────────
+      # Render streams stdout/stderr automatically to service logs.
+
 databases:
   - name: officecheck-db
     region: singapore
-    plan: free                 # 1GB storage; upgrade for production
+    plan: free
     databaseName: officecheck
     user: officecheck_user

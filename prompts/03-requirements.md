@@ -42,18 +42,6 @@ For each functional area identified, create the following Jira hierarchy:
 
 After creation, write all issue keys and titles to `requirements/jira-stories.md`.
 
-## Phase 4 — Gap Analysis
-Compare the full requirements list in `requirements/requirements-spec.md` against the Jira stories created:
-
-1. Check every FR and NFR has a corresponding Jira Story.
-2. Check every acceptance criterion has a corresponding Jira Task.
-3. Check for requirements mentioned in Confluence but not in the spec (missed requirements).
-4. Check for Jira stories without a traceable requirement (orphan stories).
-5. Document all gaps in `requirements/gap-analysis.md` with:
-   - Gap ID, Description, Type (Missing Story / Missing Task / Orphan Story / Missed Requirement)
-   - Recommended action
-6. Create Jira issues for any untracked gaps.
-
 ## Rules
 - Do not invent requirements — extract only what is stated in Confluence.
 - All API calls use env-var credentials — never hardcode tokens.

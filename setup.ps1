@@ -1,4 +1,4 @@
-# setup.ps1 — Windows setup script for OfficeCheck
+﻿# setup.ps1 — Windows setup script for OfficeCheck
 # Run ONCE after cloning: .\setup.ps1
 # Then run again any time you need to reload .env into your shell.
 
@@ -47,7 +47,7 @@ Write-Host ""
 Write-Host "[2/4] Loading .env into shell environment..."
 $loadScript = Join-Path $root "MCP\load-env.ps1"
 if (Test-Path $loadScript) {
-  . $loadScript -Verbose:$VerbosePreference
+  . $loadScript -EnvFile $envFile -Verbose:$VerbosePreference
 } else {
   # Inline fallback if load-env.ps1 is missing
   $loaded = 0
@@ -61,6 +61,20 @@ if (Test-Path $loadScript) {
     }
   }
   Write-Host "  ✅ Loaded $loaded env vars from .env"
+}
+
+# Ensure "bash" resolves to Git Bash on Windows (not WSL bash.exe)
+$gitBashCandidates = @(
+  "C:\Program Files\Git\bin\bash.exe",
+  "C:\Program Files\Git\usr\bin\bash.exe",
+  "C:\Program Files (x86)\Git\bin\bash.exe"
+)
+$gitBash = $gitBashCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+if ($gitBash) {
+  Set-Alias -Name bash -Value $gitBash -Scope Global
+  Write-Host "  ✅ Using Git Bash: $gitBash"
+} else {
+  Write-Host "  ⚠️  Git Bash not found. Install Git for Windows to run .sh hooks."
 }
 
 # ── MCP variable aliases (always runs after .env is loaded) ──
@@ -140,13 +154,14 @@ if (-not (Test-Path $gitDir)) {
 
   # Combined pre-commit entry point (Git Bash compatible)
   $preCommit = Join-Path $hooksDir "pre-commit"
-  @'
-#!/bin/sh
-# Combined pre-commit hook — auto-installed by setup.ps1
-set -e
-sh "$(git rev-parse --git-dir)/hooks/pre-commit-secrets"
-sh "$(git rev-parse --git-dir)/hooks/pre-commit-connect"
-'@ | Set-Content $preCommit -Encoding UTF8
+  $preCommitBody = @(
+    '#!/bin/sh'
+    '# Combined pre-commit hook - auto-installed by setup.ps1'
+    'set -e'
+    'sh "$(git rev-parse --git-dir)/hooks/pre-commit-secrets"'
+    'sh "$(git rev-parse --git-dir)/hooks/pre-commit-connect"'
+  )
+  Set-Content -Path $preCommit -Value $preCommitBody -Encoding UTF8
   Write-Host "  ✅ Installed: pre-commit (combined)"
 }
 
@@ -183,3 +198,4 @@ Write-Host "   To run the app:                    mvn spring-boot:run"
 Write-Host "   To run tests:                      mvn test"
 Write-Host "   To trigger Render deploy:          sh deployment/deploy.sh"
 Write-Host ""
+

@@ -2,23 +2,62 @@
 # =============================================================================
 # agent-pre-run-hook.sh
 # Purpose : Run BEFORE every agent execution in the SDLC pipeline.
-#           1. Scans all tracked source files for hardcoded secrets.
-#           2. Validates that all required connections are reachable.
+#           1. Scans tracked files for hardcoded secrets.
+#           2. Validates required connections with retry (3 attempts).
 # Usage   : source .env && bash .github/hooks/agent-pre-run-hook.sh <AGENT_NAME>
-# Exit    : 0 = OK, 1 = BLOCKED (secrets found), 2 = BLOCKED (connection failed)
+# Exit    : 0 = OK | 1 = BLOCKED (secrets) | 2 = BLOCKED (connection failure)
 # =============================================================================
 
 AGENT_NAME="${1:-UNKNOWN_AGENT}"
 TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 LOG_FILE="agents/orchestrator/pipeline-log.md"
 
+MAX_RETRIES=3
+RETRY_DELAYS=(5 10 20)
+
 log() { echo "[$TIMESTAMP][$AGENT_NAME] $1"; }
 log_to_file() {
   echo "| $TIMESTAMP | $AGENT_NAME | $1 |" >> "$LOG_FILE" 2>/dev/null || true
 }
 
+trim_crlf() {
+  printf '%s' "$1" | tr -d '\r\n'
+}
+
+check_connection() {
+  local label="$1"
+  local url="$2"
+  local header="$3"
+  local attempt status delay
+
+  for attempt in $(seq 1 "$MAX_RETRIES"); do
+    if [ -n "$header" ]; then
+      status=$(curl -s -o /dev/null -w "%{http_code}" -H "$header" "$url" --max-time 10 2>/dev/null || echo "000")
+    else
+      status=$(curl -s -o /dev/null -w "%{http_code}" "$url" --max-time 10 2>/dev/null || echo "000")
+    fi
+
+    if [ "$status" = "200" ] || [ "$status" = "202" ]; then
+      log "OK: $label reachable (HTTP $status) on attempt $attempt/$MAX_RETRIES"
+      log_to_file "✅ $label connection OK (attempt $attempt)"
+      return 0
+    fi
+
+    log "WARN: $label unreachable (HTTP $status) — attempt $attempt/$MAX_RETRIES"
+    if [ "$attempt" -lt "$MAX_RETRIES" ]; then
+      delay=${RETRY_DELAYS[$((attempt - 1))]}
+      log "      Retrying in ${delay}s ..."
+      sleep "$delay"
+    fi
+  done
+
+  log "ERROR: $label unreachable after $MAX_RETRIES attempts"
+  log_to_file "❌ $label connection FAILED after $MAX_RETRIES attempts"
+  return 1
+}
+
 # ---------------------------------------------------------------------------
-# STEP 1 — Secret / hardcoded credentials scan
+# STEP 1 — Secret scan
 # ---------------------------------------------------------------------------
 log "=== PRE-RUN HOOK: Secret Scan ==="
 
@@ -72,7 +111,7 @@ fi
 # ---------------------------------------------------------------------------
 # STEP 2 — Connection validation
 # ---------------------------------------------------------------------------
-log "=== PRE-RUN HOOK: Connection Check ==="
+log "=== PRE-RUN HOOK: Connection Check (max $MAX_RETRIES attempts/service) ==="
 
 if [ "${OFFLINE_MODE:-false}" = "true" ]; then
   log "WARNING: Connection check skipped (OFFLINE_MODE=true)"
@@ -82,83 +121,58 @@ fi
 
 CONNECTION_FAIL=0
 
-# --- Confluence ---
+# Confluence (required)
 if [ -n "$CONFLUENCE_URL" ] && [ -n "$CONFLUENCE_EMAIL" ] && [ -n "$CONFLUENCE_API_TOKEN" ]; then
-  ENCODED=$(echo -n "${CONFLUENCE_EMAIL}:${CONFLUENCE_API_TOKEN}" | base64 2>/dev/null || \
-            python3 -c "import base64,os; print(base64.b64encode(f\"{os.environ['CONFLUENCE_EMAIL']}:{os.environ['CONFLUENCE_API_TOKEN']}\".encode()).decode())" 2>/dev/null)
-  STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
-    -H "Authorization: Basic $ENCODED" \
-    "${CONFLUENCE_URL%/}/wiki/rest/api/space" --max-time 10 2>/dev/null || echo "000")
-  if [ "$STATUS" = "200" ] || [ "$STATUS" = "202" ]; then
-    log "OK: Confluence reachable (HTTP $STATUS)"
-    log_to_file "✅ Confluence connection OK"
-  else
-    log "ERROR: Confluence not reachable (HTTP $STATUS)"
-    log_to_file "❌ Confluence connection FAILED (HTTP $STATUS)"
+  CONF_EMAIL="$(trim_crlf "$CONFLUENCE_EMAIL")"
+  CONF_TOKEN="$(trim_crlf "$CONFLUENCE_API_TOKEN")"
+  ENCODED=$(printf '%s' "${CONF_EMAIL}:${CONF_TOKEN}" | base64 2>/dev/null | tr -d '\r\n')
+  if [ -z "$ENCODED" ]; then
+    ENCODED=$(python3 -c "import base64,os; e=os.environ.get('CONFLUENCE_EMAIL','').strip(); t=os.environ.get('CONFLUENCE_API_TOKEN','').strip(); print(base64.b64encode(f'{e}:{t}'.encode()).decode())" 2>/dev/null)
+  fi
+  if ! check_connection "Confluence" "${CONFLUENCE_URL%/}/wiki/rest/api/space" "Authorization: Basic $ENCODED"; then
     CONNECTION_FAIL=1
   fi
 else
   log "WARNING: Confluence env vars not set — skipping Confluence check"
+  log_to_file "⚠️ Confluence env vars missing — check skipped"
 fi
 
-# --- Jira ---
+# Jira (required for RequirementsAgent + GapAnalysisAgent)
 if [ -n "$JIRA_URL" ] && [ -n "$JIRA_EMAIL" ] && [ -n "$JIRA_API_TOKEN" ]; then
-  JIRA_ENCODED=$(echo -n "${JIRA_EMAIL}:${JIRA_API_TOKEN}" | base64 2>/dev/null || \
-                 python3 -c "import base64,os; print(base64.b64encode(f\"{os.environ['JIRA_EMAIL']}:{os.environ['JIRA_API_TOKEN']}\".encode()).decode())" 2>/dev/null)
-  JIRA_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
-    -H "Authorization: Basic $JIRA_ENCODED" \
-    "${JIRA_URL%/}/rest/api/3/myself" --max-time 10 2>/dev/null || echo "000")
-  if [ "$JIRA_STATUS" = "200" ]; then
-    log "OK: Jira reachable (HTTP $JIRA_STATUS)"
-    log_to_file "✅ Jira connection OK"
-  elif [ "$JIRA_STATUS" = "000" ] || [ -z "$JIRA_STATUS" ]; then
-    log "WARNING: Jira unreachable — continuing (Jira may not be required for this agent)"
-    log_to_file "⚠️ Jira connection UNREACHABLE — non-blocking for non-requirements agents"
-  else
-    log "ERROR: Jira auth failed (HTTP $JIRA_STATUS) — check JIRA_EMAIL and JIRA_API_TOKEN"
-    log_to_file "❌ Jira connection FAILED (HTTP $JIRA_STATUS)"
-    # Only block for requirements agent
-    if [ "$AGENT_NAME" = "RequirementsAgent" ]; then
+  JIRA_EMAIL_CLEAN="$(trim_crlf "$JIRA_EMAIL")"
+  JIRA_TOKEN_CLEAN="$(trim_crlf "$JIRA_API_TOKEN")"
+  JIRA_ENCODED=$(printf '%s' "${JIRA_EMAIL_CLEAN}:${JIRA_TOKEN_CLEAN}" | base64 2>/dev/null | tr -d '\r\n')
+  if [ -z "$JIRA_ENCODED" ]; then
+    JIRA_ENCODED=$(python3 -c "import base64,os; e=os.environ.get('JIRA_EMAIL','').strip(); t=os.environ.get('JIRA_API_TOKEN','').strip(); print(base64.b64encode(f'{e}:{t}'.encode()).decode())" 2>/dev/null)
+  fi
+  if ! check_connection "Jira" "${JIRA_URL%/}/rest/api/3/myself" "Authorization: Basic $JIRA_ENCODED"; then
+    if [ "$AGENT_NAME" = "RequirementsAgent" ] || [ "$AGENT_NAME" = "GapAnalysisAgent" ]; then
       CONNECTION_FAIL=1
+    else
+      log "WARNING: Jira unreachable — non-blocking for $AGENT_NAME."
     fi
   fi
 else
   log "WARNING: Jira env vars not set — skipping Jira check"
 fi
 
-# --- GitHub ---
+# GitHub (warning only)
 if [ -n "$GITHUB_TOKEN" ]; then
-  GH_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
-    -H "Authorization: Bearer $GITHUB_TOKEN" \
-    "https://api.github.com/user" --max-time 10 2>/dev/null || echo "000")
-  if [ "$GH_STATUS" = "200" ]; then
-    log "OK: GitHub reachable (HTTP $GH_STATUS)"
-    log_to_file "✅ GitHub connection OK"
-  else
-    log "WARNING: GitHub not reachable (HTTP $GH_STATUS)"
-    log_to_file "⚠️ GitHub connection FAILED (HTTP $GH_STATUS)"
+  if ! check_connection "GitHub" "https://api.github.com/user" "Authorization: Bearer $GITHUB_TOKEN"; then
+    log "WARNING: GitHub unreachable — non-blocking."
+    log_to_file "⚠️ GitHub connection FAILED — non-blocking"
   fi
 else
   log "WARNING: GITHUB_TOKEN not set — skipping GitHub check"
 fi
 
-# --- GitLab ---
+# GitLab (required for PlanningAgent)
 if [ -n "$GITLAB_TOKEN" ] && [ -n "$GITLAB_URL" ]; then
-  GL_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
-    -H "PRIVATE-TOKEN: $GITLAB_TOKEN" \
-    "${GITLAB_URL%/}/api/v4/user" --max-time 10 2>/dev/null || echo "000")
-  if [ "$GL_STATUS" = "200" ]; then
-    log "OK: GitLab reachable (HTTP $GL_STATUS)"
-    log_to_file "✅ GitLab connection OK"
-  elif [ "$GL_STATUS" = "000" ]; then
-    log "WARNING: GitLab unreachable — non-blocking for non-planning agents"
-    log_to_file "⚠️ GitLab connection UNREACHABLE — non-blocking"
-  else
-    log "ERROR: GitLab auth failed (HTTP $GL_STATUS) — check GITLAB_TOKEN"
-    log_to_file "❌ GitLab connection FAILED (HTTP $GL_STATUS)"
-    # Only block for planning agent
+  if ! check_connection "GitLab" "${GITLAB_URL%/}/api/v4/user" "PRIVATE-TOKEN: $GITLAB_TOKEN"; then
     if [ "$AGENT_NAME" = "PlanningAgent" ]; then
       CONNECTION_FAIL=1
+    else
+      log "WARNING: GitLab unreachable — non-blocking for $AGENT_NAME."
     fi
   fi
 else
@@ -171,8 +185,8 @@ else
 fi
 
 if [ "$CONNECTION_FAIL" -eq 1 ]; then
-  log "BLOCKED: Required connection(s) unavailable. Fix connectivity before running $AGENT_NAME."
-  log_to_file "❌ PRE-RUN HOOK BLOCKED — connection failure"
+  log "BLOCKED: Required connection(s) unavailable after $MAX_RETRIES attempts."
+  log_to_file "❌ PRE-RUN HOOK BLOCKED — connection failure after retries"
   exit 2
 fi
 
