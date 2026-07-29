@@ -1,21 +1,27 @@
 package com.capstone.integration;
 
 import com.capstone.repository.AppRepository;
+import com.capstone.security.ConnectionValidator;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.web.servlet.MockMvc;
+
+import java.util.Map;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 /**
  * Integration tests — starts full Spring context with in-memory H2 database.
- * Each test gets a fresh context to prevent shared state pollution.
+ * ConnectionValidator is mocked to prevent real network calls in CI/test environments
+ * where EXTERNAL_API_URL may be unreachable.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -28,9 +34,15 @@ class AppIntegrationTest {
     @Autowired
     private AppRepository appRepository;
 
+    @MockBean
+    private ConnectionValidator connectionValidator;
+
     @BeforeEach
-    void cleanDatabase() {
+    void setUp() {
         appRepository.deleteAll();
+        // Return empty statuses — no external connections in test environment
+        Mockito.when(connectionValidator.getConnectionStatuses()).thenReturn(Map.of());
+        Mockito.doNothing().when(connectionValidator).validateAll();
     }
 
     @Test

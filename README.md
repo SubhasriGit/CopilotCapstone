@@ -9,7 +9,7 @@ End-to-end SDLC capstone project with analysis, requirements, planning, design, 
 - Requirements and traceability in `requirements/`
 - Analysis/scoping in `project-scoping/`
 - Design docs in `design/`
-- Java 20 Maven application in `src/`
+- Java 17 Maven application in `src/`
 - Pre-commit hooks in `.github/hooks/` and `setup.sh`
 - CI/CD workflow in `.github/workflows/ci-cd.yml`
 
@@ -38,10 +38,9 @@ bash .github/hooks/agent-pre-run-hook.sh OrchestratorAgent
 ```
 **Windows (PowerShell):**
 ```powershell
-.\setup.ps1 -EnvOnly
-bash .github/hooks/agent-pre-run-hook.sh OrchestratorAgent
+.\run-orchestrator.ps1
 ```
-> `INTERACTIVE_MODE=true` must be set in `.env` (already set by default).
+> This starts the precheck and then launches an interactive Copilot orchestrator session.
 
 ---
 
@@ -53,9 +52,7 @@ INTERACTIVE_MODE=false bash .github/hooks/agent-pre-run-hook.sh OrchestratorAgen
 ```
 **Windows (PowerShell):**
 ```powershell
-.\setup.ps1 -EnvOnly
-$env:INTERACTIVE_MODE = "false"
-bash .github/hooks/agent-pre-run-hook.sh OrchestratorAgent
+.\run-orchestrator.ps1 -PipelineMode
 ```
 > Pipeline mode also triggers automatically on `git push origin main` via GitHub Actions.
 
@@ -120,7 +117,7 @@ Triggered automatically by pushing to `main` via GitHub Actions CI/CD pipeline.
 - Requirements and traceability in `requirements/`
 - Analysis/scoping in `project-scoping/`
 - Design docs in `design/`
-- Java 20 Maven application in `src/`
+- Java 17 Maven application in `src/`
 - Pre-commit hooks in `.github/hooks/` and `setup.sh`
 - CI/CD workflow in `.github/workflows/ci-cd.yml`
 

@@ -2,9 +2,9 @@
 
 **Project:** GIthubCopilotCapstone  
 **Phase:** Testing  
-**Build Tool:** Maven 3.9.9  
-**Java Version:** Corretto 20 (Java 21 LTS pending JDK upgrade)  
-**Test Run Date:** 2026-07-28  
+**Build Tool:** Maven (IntelliJ-bundled 3.x)  
+**Java Version:** Microsoft JDK 17.0.16 (pom.xml updated Java 20 → 17 to match installed JDK)  
+**Last Run:** 2026-07-29 (interactive SDLC pipeline re-run — 74/74 pass)  
 **Status:** ✅ ALL TESTS PASSED — Pipeline may advance to Deployment.
 
 ---

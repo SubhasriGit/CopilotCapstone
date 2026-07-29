@@ -18,7 +18,7 @@
     <description>End-to-end SDLC capstone project with self-healing automation and pre-commit hooks</description>
 
     <properties>
-        <java.version>20</java.version>
+        <java.version>17</java.version>
     </properties>
 
     <dependencies>

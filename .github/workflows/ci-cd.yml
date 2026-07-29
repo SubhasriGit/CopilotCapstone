@@ -17,7 +17,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  JAVA_VERSION: '20'
+  JAVA_VERSION: '17'
   APP_BASE_URL: https://officecheck-api.onrender.com
   APP_PORT: '8080'
   APP_ENV: production
