@@ -13,9 +13,14 @@ Write-Host "║  OfficeCheck — Windows Setup                 ║"
 Write-Host "╚══════════════════════════════════════════════╝"
 Write-Host ""
 
-$root = Split-Path $PSScriptRoot -ErrorAction SilentlyContinue
-if (-not $root) { $root = $PSScriptRoot }
-if (-not $root) { $root = Get-Location }
+$root = if ($PSScriptRoot) { $PSScriptRoot } else { Get-Location }
+# If setup.ps1 is inside a subfolder, go up to project root
+if (-not (Test-Path (Join-Path $root ".env")) -and (Test-Path (Join-Path $root "..\.env"))) {
+  $root = Resolve-Path (Join-Path $root "..")
+}
+if (-not (Test-Path (Join-Path $root ".env")) -and -not (Test-Path (Join-Path $root ".env.example"))) {
+  $root = Get-Location
+}
 
 # ── Step 1: Verify .env exists ──────────────────────────────
 Write-Host "[1/4] Checking .env file..."
@@ -54,6 +59,23 @@ if (Test-Path $loadScript) {
   }
   Write-Host "  ✅ Loaded $loaded env vars from .env"
 }
+
+# ── MCP variable aliases (always runs after .env is loaded) ──
+# MCP servers expect specific names that differ from our .env keys.
+$mappings = @{
+  "GITLAB_PERSONAL_ACCESS_TOKEN" = $env:GITLAB_TOKEN
+  "GITHUB_PERSONAL_ACCESS_TOKEN" = $env:GITHUB_TOKEN
+  "GITLAB_API_URL"               = "$($env:GITLAB_URL)/api/v4"
+  "CONFLUENCE_USERNAME"          = $env:CONFLUENCE_EMAIL
+  "JIRA_USERNAME"                = $env:JIRA_EMAIL
+}
+foreach ($key in $mappings.Keys) {
+  if ($mappings[$key]) {
+    [System.Environment]::SetEnvironmentVariable($key, $mappings[$key], "Process")
+    Write-Verbose "  ALIAS $key"
+  }
+}
+Write-Host "  ✅ MCP aliases set (GITLAB_PERSONAL_ACCESS_TOKEN, GITHUB_PERSONAL_ACCESS_TOKEN, etc.)"
 
 if ($EnvOnly) {
   Write-Host ""
