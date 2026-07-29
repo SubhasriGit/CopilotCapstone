@@ -1,56 +1,93 @@
 #!/bin/sh
-# setup.sh — Installs pre-commit hooks for the GIthubCopilotCapstone project.
-# Run this script once after cloning the repository.
+# setup.sh — Sets up OfficeCheck development environment (Mac/Linux).
+# Run ONCE after cloning: sh setup.sh
+# Then run again any time to reload .env: sh setup.sh --env-only
 
 set -e
 
-echo "🚀 Setting up GIthubCopilotCapstone development environment..."
+echo ""
+echo "╔══════════════════════════════════════════════╗"
+echo "║  OfficeCheck — Dev Environment Setup         ║"
+echo "╚══════════════════════════════════════════════╝"
+echo ""
 
-# Verify we're in the project root
-if [ ! -d ".git" ]; then
-    echo "❌ ERROR: Run this script from the project root (where .git is located)."
+# ── Step 1: Verify .env exists ──────────────────────────────
+echo "[1/4] Checking .env file..."
+if [ ! -f ".env" ]; then
+  if [ -f ".env.example" ]; then
+    cp .env.example .env
+    echo "  ⚠️  .env not found — copied from .env.example"
+    echo "  ✏️  Open .env and fill in your real values, then re-run this script."
+    exit 0
+  else
+    echo "  ❌ Neither .env nor .env.example found."
     exit 1
+  fi
+fi
+echo "  ✅ .env found"
+
+# ── Step 2: Load .env into shell environment ────────────────
+echo ""
+echo "[2/4] Loading .env into shell environment..."
+set -a
+. ./.env
+set +a
+echo "  ✅ .env loaded — MCP servers will resolve variables correctly"
+
+if [ "$1" = "--env-only" ]; then
+  echo ""
+  echo "✅ Environment loaded. Ready to run MCP servers."
+  exit 0
 fi
 
-# Copy hooks to .git/hooks/
-echo "📎 Installing pre-commit hooks..."
-cp .github/hooks/pre-commit-secrets .git/hooks/pre-commit-secrets
-cp .github/hooks/pre-commit-connect  .git/hooks/pre-commit-connect
-chmod +x .git/hooks/pre-commit-secrets
-chmod +x .git/hooks/pre-commit-connect
+# ── Step 3: Install pre-commit hooks ────────────────────────
+echo ""
+echo "[3/4] Installing pre-commit hooks..."
+if [ ! -d ".git" ]; then
+  echo "  ⚠️  .git not found — skipping (not a git repo root)"
+else
+  mkdir -p .git/hooks
+  cp .github/hooks/pre-commit-secrets .git/hooks/pre-commit-secrets
+  cp .github/hooks/pre-commit-connect  .git/hooks/pre-commit-connect
+  cp .github/hooks/agent-pre-run-hook.sh .git/hooks/agent-pre-run-hook.sh
+  chmod +x .git/hooks/pre-commit-secrets
+  chmod +x .git/hooks/pre-commit-connect
+  chmod +x .git/hooks/agent-pre-run-hook.sh
 
-# Create the combined pre-commit entry point
-cat > .git/hooks/pre-commit <<'HOOK'
+  cat > .git/hooks/pre-commit <<'HOOK'
 #!/bin/sh
-# Combined pre-commit hook — runs all project hooks in order
-
 set -e
-
-# 1. Secret detection
 sh "$(git rev-parse --git-dir)/hooks/pre-commit-secrets"
-
-# 2. Connection validation
 sh "$(git rev-parse --git-dir)/hooks/pre-commit-connect"
 HOOK
+  chmod +x .git/hooks/pre-commit
+  echo "  ✅ pre-commit-secrets, pre-commit-connect, agent-pre-run-hook installed"
+fi
 
-chmod +x .git/hooks/pre-commit
+# ── Step 4: Check MCP prerequisites ─────────────────────────
+echo ""
+echo "[4/4] Checking MCP server prerequisites..."
 
+if command -v node >/dev/null 2>&1; then
+  echo "  ✅ Node.js $(node --version) — GitHub/GitLab/Playwright MCP ready"
+else
+  echo "  ⚠️  Node.js not found — install from https://nodejs.org (≥18 required)"
+fi
+
+if command -v uvx >/dev/null 2>&1; then
+  echo "  ✅ uvx found — Atlassian (Confluence + Jira) MCP ready"
+else
+  echo "  ⚠️  uvx not found — install with: pip install uv"
+fi
+
+# ── Summary ─────────────────────────────────────────────────
 echo ""
-echo "✅ Pre-commit hooks installed successfully!"
+echo "══════════════════════════════════════════════"
+echo "✅ Setup complete!"
 echo ""
-echo "   Hooks installed:"
-echo "   • pre-commit-secrets  — blocks commits with hardcoded secrets"
-echo "   • pre-commit-connect  — validates required connections are reachable"
+echo "   Reload .env in a new terminal : sh setup.sh --env-only"
+echo "   Run the app                   : mvn spring-boot:run"
+echo "   Run tests                     : mvn test"
+echo "   Trigger Render deploy         : sh deployment/deploy.sh"
 echo ""
-echo "   Environment variables (set before running the app):"
-echo "   • EXTERNAL_API_URL    — Base URL for external API"
-echo "   • EXTERNAL_API_KEY    — API key for external service"
-echo "   • DB_URL              — Database connection URL (optional: defaults to H2 in-memory)"
-echo "   • DB_USERNAME         — Database username"
-echo "   • DB_PASSWORD         — Database password"
-echo "   • APP_PORT            — Application port (default: 8080)"
-echo ""
-echo "   Offline development:"
-echo "   • OFFLINE_MODE=true   — skips connection validation hook"
-echo "   • SKIP_SECRET_CHECK=true — skips secret scan (requires team lead approval)"
-echo ""
+
