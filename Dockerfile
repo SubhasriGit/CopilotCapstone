@@ -8,7 +8,7 @@ RUN mvn dependency:go-offline -q
 COPY src ./src
 RUN mvn clean package -DskipTests -q
 
-FROM amazoncorretto:20-alpine3.19
+FROM amazoncorretto:20
 
 WORKDIR /app
 
