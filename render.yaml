@@ -9,7 +9,7 @@ services:
     dockerfilePath: ./Dockerfile
     region: singapore
     plan: free
-    branch: main
+    branch: copilot/promising-meerkat
     autoDeploy: false
     healthCheckPath: /health
 
