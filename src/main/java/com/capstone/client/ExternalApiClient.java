@@ -25,10 +25,10 @@ public class ExternalApiClient {
     public ExternalApiClient(ConfigLoader config,
                              RetryWrapper retryWrapper,
                              CircuitBreaker circuitBreaker) {
-        String baseUrl = config.getOrDefault("EXTERNAL_API_URL", "http://localhost:9090");
+        String baseUrl = config.getOrDefault("EXTERNAL_API_URL", "https://api.example.com");
         String appEnv  = config.getOrDefault("APP_ENV", "local");
 
-        // Enforce HTTPS in non-local environments (W-001 fix)
+        // Enforce HTTPS in non-local environments when a custom endpoint is configured.
         if (!"local".equalsIgnoreCase(appEnv) && baseUrl.startsWith("http://")) {
             throw new IllegalStateException(
                 "EXTERNAL_API_URL must use HTTPS in non-local environments (APP_ENV=" + appEnv + ")."
