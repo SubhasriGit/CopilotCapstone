@@ -63,7 +63,7 @@ jobs:
           cache: maven
 
       - name: Run tests with JaCoCo coverage
-        run: mvn -B -ntp test jacoco:report jacoco:check
+        run: mvn -B -ntp verify
 
       - name: Upload test and coverage artifacts
         if: always()
