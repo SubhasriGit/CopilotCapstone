@@ -12,9 +12,6 @@ FROM amazoncorretto:20
 
 WORKDIR /app
 
-RUN groupadd -r appgroup && useradd -r -g appgroup appuser
-USER appuser
-
 COPY --from=build /build/target/github-copilot-capstone-*.jar app.jar
 
 ENV PORT=8080
