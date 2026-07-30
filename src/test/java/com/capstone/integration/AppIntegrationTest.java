@@ -53,6 +53,23 @@ class AppIntegrationTest {
     }
 
     @Test
+    void rootEndpointReturnsWelcomeMessage() throws Exception {
+        mockMvc.perform(get("/"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.message").value("OfficeCheck API - GitHub Copilot Capstone"))
+            .andExpect(jsonPath("$.endpoints.health").value("/health"));
+    }
+
+    @Test
+    void unknownPathReturnsCustomErrorPage() throws Exception {
+        mockMvc.perform(get("/does-not-exist"))
+            .andExpect(status().isNotFound())
+            .andExpect(jsonPath("$.status").value(404))
+            .andExpect(jsonPath("$.error").value("Not Found"))
+            .andExpect(jsonPath("$.path").value("/does-not-exist"));
+    }
+
+    @Test
     void getAllEntitiesReturnsEmptyListInitially() throws Exception {
         mockMvc.perform(get("/api/v1/entities"))
             .andExpect(status().isOk())
