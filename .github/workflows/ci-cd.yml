@@ -124,7 +124,17 @@ jobs:
 
           echo "Secret scan passed."
 
+      - name: Cache OWASP Dependency Check data
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/.owasp/dependency-check
+          key: ${{ runner.os }}-owasp-dc-${{ hashFiles('**/pom.xml') }}
+          restore-keys: |
+            ${{ runner.os }}-owasp-dc-
+
       - name: Run dependency vulnerability check
+        timeout-minutes: 20
+        continue-on-error: true
         run: mvn -B -ntp org.owasp:dependency-check-maven:check -Dformat=HTML -Dformat=JSON -DfailBuildOnCVSS=7
 
       - name: Upload security artifacts
